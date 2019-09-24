@@ -7,57 +7,56 @@ import (
 	"github.com/tevino/abool"
 )
 
-// PeerIDLocker is used to handle mutex lock/unlock
-// on a per-peerID basis for systems that may need
-// concurrent access to peerID specific resources
-// such as IPNS record publishing
+// CIDLocker is used to block access to resources
+// on a per-CID basis, useful when guarding concurrent
+// access in systems handling many different CIDs (like reference counting)
 //
 // The only time this blocks is when creating
 // the initial lock, afterwards all writes for a record
 // are non-blocking unless another record is first published
 // at the same time.
-type PeerIDLocker struct {
+type CIDLocker struct {
 	locks map[gocid.Cid]*abool.AtomicBool
 	mux   sync.RWMutex
 }
 
-// New returns a fresh instance of PeerIDLocker
-func New() *PeerIDLocker {
-	return &PeerIDLocker{
+// New returns a fresh instance of CIDLocker
+func New() *CIDLocker {
+	return &CIDLocker{
 		locks: make(map[gocid.Cid]*abool.AtomicBool),
 	}
 }
 
 // Create is like exists, except it
 // populates the map if the entry does not exist
-func (pl *PeerIDLocker) Create(cid gocid.Cid) {
-	if !pl.Exists(cid) {
-		pl.mux.Lock()
-		pl.locks[cid] = abool.New()
-		pl.mux.Unlock()
+func (cl *CIDLocker) Create(cid gocid.Cid) {
+	if !cl.Exists(cid) {
+		cl.mux.Lock()
+		cl.locks[cid] = abool.New()
+		cl.mux.Unlock()
 	}
 }
 
 // Exists check if we have a lock for this peerID
-func (pl *PeerIDLocker) Exists(cid gocid.Cid) bool {
-	pl.mux.RLock()
-	_, exists := pl.locks[cid]
-	pl.mux.RUnlock()
+func (cl *CIDLocker) Exists(cid gocid.Cid) bool {
+	cl.mux.RLock()
+	_, exists := cl.locks[cid]
+	cl.mux.RUnlock()
 	return exists
 }
 
 // Lock obtains a lock for the peerID
-func (pl *PeerIDLocker) Lock(cid gocid.Cid) {
-	pl.Create(cid)
-	pl.mux.RLock()
-	pl.locks[cid].SetToIf(false, true)
-	pl.mux.RUnlock()
+func (cl *CIDLocker) Lock(cid gocid.Cid) {
+	cl.Create(cid)
+	cl.mux.RLock()
+	cl.locks[cid].SetToIf(false, true)
+	cl.mux.RUnlock()
 }
 
 // Unlock reverts the peerID lock
-func (pl *PeerIDLocker) Unlock(cid gocid.Cid) {
-	pl.Create(cid)
-	pl.mux.RLock()
-	pl.locks[cid].SetToIf(true, false)
-	pl.mux.RUnlock()
+func (cl *CIDLocker) Unlock(cid gocid.Cid) {
+	cl.Create(cid)
+	cl.mux.RLock()
+	cl.locks[cid].SetToIf(true, false)
+	cl.mux.RUnlock()
 }
